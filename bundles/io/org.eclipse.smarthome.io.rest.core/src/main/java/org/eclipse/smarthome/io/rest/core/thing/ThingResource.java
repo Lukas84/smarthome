@@ -15,9 +15,11 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+
+import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -35,6 +37,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
+
 import org.eclipse.smarthome.config.core.ConfigDescription;
 import org.eclipse.smarthome.config.core.ConfigDescriptionRegistry;
 import org.eclipse.smarthome.config.core.ConfigUtil;
@@ -42,6 +45,7 @@ import org.eclipse.smarthome.config.core.Configuration;
 import org.eclipse.smarthome.config.core.status.ConfigStatusInfo;
 import org.eclipse.smarthome.config.core.status.ConfigStatusService;
 import org.eclipse.smarthome.config.core.validation.ConfigValidationException;
+import org.eclipse.smarthome.core.auth.Role;
 import org.eclipse.smarthome.core.items.GenericItem;
 import org.eclipse.smarthome.core.items.ItemFactory;
 import org.eclipse.smarthome.core.items.ItemNotFoundException;
@@ -67,9 +71,10 @@ import org.eclipse.smarthome.core.thing.type.ThingTypeRegistry;
 import org.eclipse.smarthome.core.thing.util.ThingHelper;
 import org.eclipse.smarthome.io.rest.JSONResponse;
 import org.eclipse.smarthome.io.rest.LocaleUtil;
-import org.eclipse.smarthome.io.rest.RESTResource;
+import org.eclipse.smarthome.io.rest.SatisfiableRESTResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -91,7 +96,7 @@ import io.swagger.annotations.ApiResponses;
  */
 @Path(ThingResource.PATH_THINGS)
 @Api(value = ThingResource.PATH_THINGS)
-public class ThingResource implements RESTResource {
+public class ThingResource implements SatisfiableRESTResource {
 
     private final Logger logger = LoggerFactory.getLogger(ThingResource.class);
 
@@ -119,6 +124,7 @@ public class ThingResource implements RESTResource {
      * @return Response holding the newly created Thing or error information
      */
     @POST
+    @RolesAllowed({ Role.ADMIN })
     @Consumes(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Creates a new thing and adds it to the registry.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -181,11 +187,11 @@ public class ThingResource implements RESTResource {
         }
 
         thingRegistry.add(thing);
-        return getThingResponse(Status.CREATED, thing, locale,
-                "Thing " + thing.getUID().toString() + " already exists!");
+        return getThingResponse(Status.CREATED, thing, locale, null);
     }
 
     @GET
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Get all available things.", response = EnrichedThingDTO.class, responseContainer = "Set")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK") })
@@ -198,6 +204,7 @@ public class ThingResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{thingUID}")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Gets thing by UID.")
@@ -226,6 +233,7 @@ public class ThingResource implements RESTResource {
      * @return Response with status/error information
      */
     @POST
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{thingUID}/channels/{channelId}/link")
     @Consumes(MediaType.TEXT_PLAIN)
     @ApiOperation(value = "Links item to a channel. Creates item if such does not exist yet.")
@@ -281,6 +289,7 @@ public class ThingResource implements RESTResource {
      * @return Response with status/error information
      */
     @DELETE
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{thingUID}")
     @ApiOperation(value = "Removes a thing from the registry. Set \'force\' to __true__ if you want the thing te be removed immediately.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -334,6 +343,7 @@ public class ThingResource implements RESTResource {
      * @return Response with status/error information
      */
     @DELETE
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{thingUID}/channels/{channelId}/link")
     @ApiOperation(value = "Unlinks item from a channel.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK") })
@@ -365,6 +375,7 @@ public class ThingResource implements RESTResource {
      * @throws IOException
      */
     @PUT
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{thingUID}")
     @Consumes(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Updates a thing.")
@@ -419,6 +430,7 @@ public class ThingResource implements RESTResource {
      * @throws IOException
      */
     @PUT
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{thingUID}/config")
     @Consumes(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Updates thing's configuration.")
@@ -471,6 +483,7 @@ public class ThingResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Path("/{thingUID}/config/status")
     @ApiOperation(value = "Gets thing's config status.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -510,7 +523,7 @@ public class ThingResource implements RESTResource {
      *
      * @param status
      * @param thing
-     * @param errormessage
+     * @param errormessage an optional error message (may be null), ignored if the status family is successful
      * @return Response
      */
     private Response getThingResponse(Status status, Thing thing, Locale locale, String errormessage) {
@@ -596,7 +609,7 @@ public class ThingResource implements RESTResource {
     private Map<String, Set<String>> getLinkedItemsMap(Thing thing) {
         Map<String, Set<String>> linkedItemsMap = new HashMap<>();
         for (Channel channel : thing.getChannels()) {
-            Set<String> linkedItems = itemChannelLinkRegistry.getLinkedItems(channel.getUID());
+            Set<String> linkedItems = itemChannelLinkRegistry.getLinkedItemNames(channel.getUID());
             linkedItemsMap.put(channel.getUID().getId(), linkedItems);
         }
         return linkedItemsMap;
@@ -661,6 +674,15 @@ public class ThingResource implements RESTResource {
         }
 
         return ConfigUtil.normalizeTypes(properties, configDesc);
+    }
+
+    @Override
+    public boolean isSatisfied() {
+        return itemChannelLinkRegistry != null && itemFactory != null && itemRegistry != null
+                && managedItemChannelLinkProvider != null && managedItemProvider != null && managedThingProvider != null
+                && thingRegistry != null && configStatusService != null && configDescRegistry != null
+                && thingTypeRegistry != null;
+
     }
 
 }

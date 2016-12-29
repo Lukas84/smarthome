@@ -25,6 +25,7 @@ import org.eclipse.smarthome.core.thing.binding.ThingHandler;
 import org.eclipse.smarthome.core.thing.events.ThingStatusInfoChangedEvent;
 import org.eclipse.smarthome.core.thing.type.ChannelType;
 import org.eclipse.smarthome.core.thing.type.TypeResolver;
+import org.eclipse.smarthome.core.thing.util.ThingHandlerHelper;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -253,7 +254,7 @@ public class ThingLinkManager extends AbstractTypedEventSubscriber<ThingStatusIn
 
     private void informHandlerAboutLinkedChannel(Thing thing, Channel channel) {
         // Don't notify the thing if the thing isn't initialised
-        if (thing.getStatus() != ThingStatus.ONLINE && thing.getStatus() != ThingStatus.OFFLINE) {
+        if (!ThingHandlerHelper.isHandlerInitialized(thing)) {
             return;
         }
 
@@ -272,7 +273,7 @@ public class ThingLinkManager extends AbstractTypedEventSubscriber<ThingStatusIn
 
     private void informHandlerAboutUnlinkedChannel(Thing thing, Channel channel) {
         // Don't notify the thing if the thing isn't initialised
-        if (thing.getStatus() != ThingStatus.ONLINE && thing.getStatus() != ThingStatus.OFFLINE) {
+        if (!ThingHandlerHelper.isHandlerInitialized(thing)) {
             return;
         }
 
@@ -292,15 +293,14 @@ public class ThingLinkManager extends AbstractTypedEventSubscriber<ThingStatusIn
 
     @Override
     protected void receiveTypedEvent(ThingStatusInfoChangedEvent event) {
-        // when a thing handler is successfully initialized (i.e. it goes from INITIALIZING to ONLINE or OFFLINE), we
-        // need to make sure that channelLinked() is called for all existing links
-        if (event.getOldStatusInfo().getStatus() == ThingStatus.INITIALIZING) {
-            if (event.getStatusInfo().getStatus() == ThingStatus.ONLINE
-                    || event.getStatusInfo().getStatus() == ThingStatus.OFFLINE) {
+        // when a thing handler is successfully initialized (i.e. it goes from INITIALIZING to UNKNOWN, ONLINE or
+        // OFFLINE), we need to make sure that channelLinked() is called for all existing links
+        if (ThingStatus.INITIALIZING.equals(event.getOldStatusInfo().getStatus())) {
+            if (ThingHandlerHelper.isHandlerInitialized(event.getStatusInfo().getStatus())) {
                 Thing thing = thingRegistry.get(event.getThingUID());
                 if (thing != null) {
                     for (Channel channel : thing.getChannels()) {
-                        if (itemChannelLinkRegistry.getLinkedItems(channel.getUID()).size() > 0) {
+                        if (itemChannelLinkRegistry.getLinkedItemNames(channel.getUID()).size() > 0) {
                             informHandlerAboutLinkedChannel(thing, channel);
                         }
                     }

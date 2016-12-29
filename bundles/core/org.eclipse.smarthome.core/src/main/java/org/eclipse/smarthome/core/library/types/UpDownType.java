@@ -7,16 +7,42 @@
  */
 package org.eclipse.smarthome.core.library.types;
 
+import java.math.BigDecimal;
+
+import org.eclipse.smarthome.core.library.internal.StateConverterUtil;
 import org.eclipse.smarthome.core.types.Command;
+import org.eclipse.smarthome.core.types.Convertible;
 import org.eclipse.smarthome.core.types.PrimitiveType;
 import org.eclipse.smarthome.core.types.State;
 
-public enum UpDownType implements PrimitiveType, State, Command {
-    UP, DOWN;
+public enum UpDownType implements PrimitiveType, State, Command, Convertible {
+    UP,
+    DOWN;
 
     @Override
     public String format(String pattern) {
         return String.format(pattern, this.toString());
+    }
+
+    @Override
+    public String toString() {
+        return toFullString();
+    }
+
+    @Override
+    public String toFullString() {
+        return super.toString();
+    }
+
+    @Override
+    public State as(Class<? extends State> target) {
+        if (target == DecimalType.class) {
+            return equals(UP) ? DecimalType.ZERO : new DecimalType(new BigDecimal("1.0"));
+        } else if (target == PercentType.class) {
+            return equals(UP) ? PercentType.ZERO : PercentType.HUNDRED;
+        } else {
+            return StateConverterUtil.defaultConversion(this, target);
+        }
     }
 
 }

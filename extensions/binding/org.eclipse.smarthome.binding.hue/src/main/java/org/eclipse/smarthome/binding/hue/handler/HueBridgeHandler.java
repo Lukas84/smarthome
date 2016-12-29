@@ -11,17 +11,21 @@ import static org.eclipse.smarthome.binding.hue.HueBindingConstants.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.smarthome.binding.hue.internal.HueConfigStatusMessage;
 import org.eclipse.smarthome.config.core.Configuration;
+import org.eclipse.smarthome.config.core.status.ConfigStatusMessage;
 import org.eclipse.smarthome.core.library.types.OnOffType;
 import org.eclipse.smarthome.core.thing.Bridge;
 import org.eclipse.smarthome.core.thing.ChannelUID;
@@ -29,7 +33,7 @@ import org.eclipse.smarthome.core.thing.Thing;
 import org.eclipse.smarthome.core.thing.ThingStatus;
 import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.thing.ThingTypeUID;
-import org.eclipse.smarthome.core.thing.binding.BaseBridgeHandler;
+import org.eclipse.smarthome.core.thing.binding.ConfigStatusBridgeHandler;
 import org.eclipse.smarthome.core.types.Command;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +61,7 @@ import nl.q42.jue.exceptions.UnauthorizedException;
  * @author Stefan Bußweiler - Added new thing status handling
  * @author Jochen Hiller - fixed status updates, use reachable=true/false for state compare
  */
-public class HueBridgeHandler extends BaseBridgeHandler {
+public class HueBridgeHandler extends ConfigStatusBridgeHandler {
 
     private static final String LIGHT_STATE_ADDED = "added";
 
@@ -71,7 +75,7 @@ public class HueBridgeHandler extends BaseBridgeHandler {
 
     private Logger logger = LoggerFactory.getLogger(HueBridgeHandler.class);
 
-    private Map<String, FullLight> lastLightStates = new HashMap<>();
+    private Map<String, FullLight> lastLightStates = new ConcurrentHashMap<>();
 
     private boolean lastBridgeConnectionState = false;
 
@@ -151,7 +155,7 @@ public class HueBridgeHandler extends BaseBridgeHandler {
                 logger.error("An unexpected error occurred: {}", t.getMessage(), t);
             }
         }
-
+        
         private boolean isReachable(String ipAddress) {
             try {
                 // note that InetAddress.isReachable is unreliable, see
@@ -491,4 +495,21 @@ public class HueBridgeHandler extends BaseBridgeHandler {
         return colorModeIsEqual && effectIsEqual;
     }
 
+    @Override
+    public Collection<ConfigStatusMessage> getConfigStatus() {
+        // The bridge IP address to be used for checks
+        final String bridgeIpAddress = (String) getThing().getConfiguration().get(HOST);
+        Collection<ConfigStatusMessage> configStatusMessages;
+
+        // Check whether an IP address is provided
+        if (bridgeIpAddress == null || bridgeIpAddress.isEmpty()) {
+            configStatusMessages = Collections.singletonList(ConfigStatusMessage.Builder.error(HOST)
+                    .withMessageKeySuffix(HueConfigStatusMessage.IP_ADDRESS_MISSING.getMessageKey()).withArguments(HOST)
+                    .build());
+        } else {
+            configStatusMessages = Collections.emptyList();
+        }
+
+        return configStatusMessages;
+    }
 }

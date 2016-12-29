@@ -6,13 +6,6 @@
  * http://www.eclipse.org/legal/epl-v10.html
  */
 package org.eclipse.smarthome.io.javasound.internal;
-/**
- * Copyright (c) 2014-2016 openHAB UG (haftungsbeschraenkt) and others.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- */
 
 import java.util.Collections;
 import java.util.Locale;
@@ -37,25 +30,30 @@ import org.eclipse.smarthome.core.audio.AudioStream;
 public class JavaSoundAudioSource implements AudioSource {
 
     /**
-     * TargetDataLine for the mic
+     * Java Sound audio format
      */
-    private final TargetDataLine microphone;
+    private final javax.sound.sampled.AudioFormat format = new javax.sound.sampled.AudioFormat(16000.0f, 16, 1, true,
+            false);
 
     /**
      * AudioFormat of the JavaSoundAudioSource
      */
-    private final AudioFormat audioFormat;
+    private final AudioFormat audioFormat = convertAudioFormat(format);
 
     /**
-     * Constructs a JavaSoundAudioSource with the passed microphone and AudioFormat
-     *
-     * @param microphone The mic which data is pulled from
-     * @param audioFormat The AudioFormat of this JavaSoundAudioSource
+     * TargetDataLine for the mic
+     */
+    private TargetDataLine microphone;
+
+    /**
+     * Constructs a JavaSoundAudioSource
      */
     public JavaSoundAudioSource() {
-        TargetDataLine microphone;
-        javax.sound.sampled.AudioFormat format = new javax.sound.sampled.AudioFormat(16000.0f, 16, 1, true, false);
+    }
+
+    private void initMicrophone(javax.sound.sampled.AudioFormat format) throws AudioException {
         try {
+            TargetDataLine microphone;
             microphone = AudioSystem.getTargetDataLine(format);
 
             DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
@@ -64,17 +62,19 @@ public class JavaSoundAudioSource implements AudioSource {
             microphone.open(format);
 
             this.microphone = microphone;
-            this.audioFormat = convertAudioFormat(format);
         } catch (Exception e) {
-            throw new RuntimeException("Error creating the AudioSource", e);
+            throw new AudioException("Error creating the audio input stream.", e);
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public AudioStream getInputStream() throws AudioException {
+    public synchronized AudioStream getInputStream(AudioFormat expectedFormat) throws AudioException {
+        if (!expectedFormat.isCompatible(audioFormat)) {
+            throw new AudioException("Cannot produce streams in format " + expectedFormat);
+        }
+        if (microphone == null) {
+            initMicrophone(format);
+        }
         return new JavaSoundInputStream(this.microphone, audioFormat);
     }
 
@@ -89,7 +89,7 @@ public class JavaSoundAudioSource implements AudioSource {
      * @param audioFormat the AudioFormat to convert
      * @return The converted AudioFormat
      */
-    AudioFormat convertAudioFormat(javax.sound.sampled.AudioFormat audioFormat) {
+    private static AudioFormat convertAudioFormat(javax.sound.sampled.AudioFormat audioFormat) {
         String container = AudioFormat.CONTAINER_WAVE;
 
         String codec = audioFormat.getEncoding().toString();

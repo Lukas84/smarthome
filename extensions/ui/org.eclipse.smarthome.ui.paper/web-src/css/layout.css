@@ -443,3 +443,15 @@ md-toast {
 		font-weight: 400;
 	}
 }
+
+.jsDisabled {
+	position: absolute;
+	top: 0px;
+	background-color: #AE0000;
+	color: white;
+	z-index: 100;
+	font-weight: bold;
+	font-size: 120%;
+	width: 100%;
+	text-align: center;
+}

@@ -21,6 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
+import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
@@ -35,6 +36,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.eclipse.smarthome.core.auth.Role;
 import org.eclipse.smarthome.core.items.Item;
 import org.eclipse.smarthome.core.items.ItemNotFoundException;
 import org.eclipse.smarthome.core.items.ItemRegistry;
@@ -54,7 +56,7 @@ import org.eclipse.smarthome.core.types.State;
 import org.eclipse.smarthome.core.types.TypeParser;
 import org.eclipse.smarthome.io.rest.JSONResponse;
 import org.eclipse.smarthome.io.rest.LocaleUtil;
-import org.eclipse.smarthome.io.rest.RESTResource;
+import org.eclipse.smarthome.io.rest.SatisfiableRESTResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +76,7 @@ import io.swagger.annotations.ApiResponses;
  */
 @Path(PersistenceResource.PATH)
 @Api(value = PersistenceResource.PATH)
-public class PersistenceResource implements RESTResource {
+public class PersistenceResource implements SatisfiableRESTResource {
 
     private final Logger logger = LoggerFactory.getLogger(PersistenceResource.class);
     private final int MILLISECONDS_PER_DAY = 86400000;
@@ -106,6 +108,7 @@ public class PersistenceResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.ADMIN })
     @Produces({ MediaType.APPLICATION_JSON })
     @ApiOperation(value = "Gets a list of persistence services.", response = String.class, responseContainer = "List")
     @ApiResponses(value = @ApiResponse(code = 200, message = "OK"))
@@ -119,6 +122,7 @@ public class PersistenceResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.ADMIN })
     @Path("/items")
     @Produces({ MediaType.APPLICATION_JSON })
     @ApiOperation(value = "Gets a list of items available via a specific persistence service.", response = String.class, responseContainer = "List")
@@ -130,6 +134,7 @@ public class PersistenceResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Path("/items/{itemname: [a-zA-Z_0-9]*}")
     @Produces({ MediaType.APPLICATION_JSON })
     @ApiOperation(value = "Gets item persistence data from the persistence service.", response = ItemHistoryDTO.class)
@@ -152,6 +157,7 @@ public class PersistenceResource implements RESTResource {
     }
 
     @DELETE
+    @RolesAllowed({ Role.ADMIN })
     @Path("/items/{itemname: [a-zA-Z_0-9]*}")
     @Produces({ MediaType.APPLICATION_JSON })
     @ApiOperation(value = "Delete item data from a specific persistence service.", response = String.class, responseContainer = "List")
@@ -170,6 +176,7 @@ public class PersistenceResource implements RESTResource {
     }
 
     @PUT
+    @RolesAllowed({ Role.ADMIN })
     @Path("/items/{itemname: [a-zA-Z_0-9]*}")
     @Produces({ MediaType.APPLICATION_JSON })
     @ApiOperation(value = "Stores item persistence data into the persistence service.", response = ItemHistoryDTO.class)
@@ -469,5 +476,10 @@ public class PersistenceResource implements RESTResource {
 
         mService.store(item, dateTime, state);
         return Response.status(Status.OK).build();
+    }
+
+    @Override
+    public boolean isSatisfied() {
+        return itemRegistry != null && persistenceServiceRegistry != null;
     }
 }

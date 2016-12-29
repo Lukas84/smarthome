@@ -33,14 +33,23 @@
 
 <meta name="apple-mobile-web-app-capable" content="yes" />
 
+<noscript>
+	<div class="jsDisabled">Sorry! PaperUI requires JavaScript to run. Please enable it in your browser.</div>
+	<style>
+.jsEnabled {
+	display: none;
+}
+</style>
+</noscript>
 </head>
 
 <body ng-controller="BodyController">
 	<div id="authentication" data-access-token="{{ACCESS_TOKEN}}"></div>
+
 	<div ng-include="'partials/include.extension.html'"></div>
 	<div ng-include="'partials/navigation.menu.html'"></div>
 
-	<div id="wrapper">
+	<div class="jsEnabled" id="wrapper">
 		<header>
 			<a href="#" class="open-menu">&#x2261;</a>
 			<div class="title">
@@ -53,6 +62,7 @@
 				</h1>
 			</div>
 		</header>
+		<bgsound id="audioSink" loop="1">
 
 		<ng-view autoscroll="true"></ng-view>
 
@@ -73,9 +83,12 @@
 
 	<script src="js/sprintf.min.js"></script>
 
+	<script src="js/eventsource.min.js"></script>
+
 	<!-- inject:js -->
 	<!-- endinject -->
 
+	<script src="js/widget.multiselect.js"></script>
 </body>
 
 </html>

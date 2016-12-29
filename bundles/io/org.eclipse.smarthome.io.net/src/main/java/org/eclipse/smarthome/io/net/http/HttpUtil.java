@@ -59,7 +59,7 @@ public class HttpUtil {
      * @param timeout the socket timeout to wait for data
      *
      * @return the response body or <code>NULL</code> when the request went wrong
-     * @throws IOException when the request execution failed, timed out or it was interrupted  
+     * @throws IOException when the request execution failed, timed out or it was interrupted
      */
     public static String executeUrl(String httpMethod, String url, int timeout) throws IOException {
         return executeUrl(httpMethod, url, null, null, timeout);
@@ -78,10 +78,10 @@ public class HttpUtil {
      * @param timeout the socket timeout to wait for data
      *
      * @return the response body or <code>NULL</code> when the request went wrong
-     * @throws IOException when the request execution failed, timed out or it was interrupted  
+     * @throws IOException when the request execution failed, timed out or it was interrupted
      */
-    public static String executeUrl(String httpMethod, String url, InputStream content, String contentType,
-            int timeout) throws IOException {
+    public static String executeUrl(String httpMethod, String url, InputStream content, String contentType, int timeout)
+            throws IOException {
 
         return executeUrl(httpMethod, url, null, content, contentType, timeout);
     }
@@ -100,7 +100,7 @@ public class HttpUtil {
      * @param timeout the socket timeout to wait for data
      *
      * @return the response body or <code>NULL</code> when the request went wrong
-     * @throws IOException when the request execution failed, timed out or it was interrupted  
+     * @throws IOException when the request execution failed, timed out or it was interrupted
      */
     public static String executeUrl(String httpMethod, String url, Properties httpHeaders, InputStream content,
             String contentType, int timeout) throws IOException {
@@ -148,7 +148,7 @@ public class HttpUtil {
      * @param proxyPassword the password to authenticate with the proxy
      * @param nonProxyHosts the hosts that won't be routed through the proxy
      * @return the response body or <code>NULL</code> when the request went wrong
-     * @throws IOException when the request execution failed, timed out or it was interrupted 
+     * @throws IOException when the request execution failed, timed out or it was interrupted
      */
     public static String executeUrl(String httpMethod, String url, Properties httpHeaders, InputStream content,
             String contentType, int timeout, String proxyHost, Integer proxyPort, String proxyUser,
@@ -207,7 +207,7 @@ public class HttpUtil {
         }
 
         // add content if a valid method is given ...
-        if (method.equals(HttpMethod.POST) || method.equals(HttpMethod.PUT) && content != null) {
+        if (content != null && (method.equals(HttpMethod.POST) || method.equals(HttpMethod.PUT))) {
             request.content(new InputStreamContentProvider(content), contentType);
         }
 
@@ -224,7 +224,8 @@ public class HttpUtil {
             }
 
             byte[] rawResponse = response.getContent();
-            String encoding = response.getEncoding().replaceAll("\"", "").trim();
+            String encoding = response.getEncoding() != null ? response.getEncoding().replaceAll("\"", "").trim()
+                    : "UTF-8";
             String responseBody = new String(rawResponse, encoding);
             if (!responseBody.isEmpty()) {
                 logger.trace(responseBody);

@@ -19,7 +19,7 @@
    </description>
 
    <copyright>
-      Copyright (C) 2014 openHAB UG (haftungsbeschränkt) and others
+      Copyright (c) 2014-2016 by the respective copyright holders.
    </copyright>
 
    <license url="%licenseURL">
@@ -34,6 +34,20 @@
 
    <plugin
          id="org.eclipse.smarthome.io.rest"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"
+         unpack="false"/>
+
+   <plugin
+         id="org.eclipse.smarthome.io.rest.auth"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"
+         unpack="false"/>
+
+   <plugin
+         id="org.eclipse.smarthome.io.rest.auth.basic"
          download-size="0"
          install-size="0"
          version="0.0.0"
@@ -59,9 +73,23 @@
          install-size="0"
          version="0.0.0"
          unpack="false"/>
-		 
+
    <plugin
          id="org.eclipse.smarthome.io.rest.sse"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"
+         unpack="false"/>
+
+   <plugin
+         id="org.eclipse.smarthome.io.rest.voice"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"
+         unpack="false"/>
+
+   <plugin
+         id="org.eclipse.smarthome.io.rest.log"
          download-size="0"
          install-size="0"
          version="0.0.0"

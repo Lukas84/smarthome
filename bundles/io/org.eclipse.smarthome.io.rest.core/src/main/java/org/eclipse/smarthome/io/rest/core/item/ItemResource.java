@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -34,6 +35,7 @@ import javax.ws.rs.core.Response.ResponseBuilder;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
+import org.eclipse.smarthome.core.auth.Role;
 import org.eclipse.smarthome.core.events.EventPublisher;
 import org.eclipse.smarthome.core.items.ActiveItem;
 import org.eclipse.smarthome.core.items.GenericItem;
@@ -55,7 +57,7 @@ import org.eclipse.smarthome.core.types.State;
 import org.eclipse.smarthome.core.types.TypeParser;
 import org.eclipse.smarthome.io.rest.JSONResponse;
 import org.eclipse.smarthome.io.rest.LocaleUtil;
-import org.eclipse.smarthome.io.rest.RESTResource;
+import org.eclipse.smarthome.io.rest.SatisfiableRESTResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,7 +91,7 @@ import io.swagger.annotations.ApiResponses;
  */
 @Path(ItemResource.PATH_ITEMS)
 @Api(value = ItemResource.PATH_ITEMS)
-public class ItemResource implements RESTResource {
+public class ItemResource implements SatisfiableRESTResource {
 
     private final Logger logger = LoggerFactory.getLogger(ItemResource.class);
 
@@ -137,6 +139,7 @@ public class ItemResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Get all available items.", response = EnrichedItemDTO.class, responseContainer = "List")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK") })
@@ -152,6 +155,7 @@ public class ItemResource implements RESTResource {
     }
 
     @GET
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}")
     @Produces({ MediaType.APPLICATION_JSON })
     @ApiOperation(value = "Gets a single item.", response = EnrichedItemDTO.class)
@@ -181,6 +185,7 @@ public class ItemResource implements RESTResource {
      * @return
      */
     @GET
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}/state")
     @Produces(MediaType.TEXT_PLAIN)
     @ApiOperation(value = "Gets the state of an item.")
@@ -206,6 +211,7 @@ public class ItemResource implements RESTResource {
     }
 
     @PUT
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}/state")
     @Consumes(MediaType.TEXT_PLAIN)
     @ApiOperation(value = "Updates the state of an item.")
@@ -249,6 +255,7 @@ public class ItemResource implements RESTResource {
     }
 
     @POST
+    @RolesAllowed({ Role.USER, Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}")
     @Consumes(MediaType.TEXT_PLAIN)
     @ApiOperation(value = "Sends a command to an item.")
@@ -295,6 +302,7 @@ public class ItemResource implements RESTResource {
     }
 
     @PUT
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{itemName: [a-zA-Z_0-9]*}/members/{memberItemName: [a-zA-Z_0-9]*}")
     @ApiOperation(value = "Adds a new member to a group item.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -332,6 +340,7 @@ public class ItemResource implements RESTResource {
     }
 
     @DELETE
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{itemName: [a-zA-Z_0-9]*}/members/{memberItemName: [a-zA-Z_0-9]*}")
     @ApiOperation(value = "Removes an existing member from a group item.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -369,6 +378,7 @@ public class ItemResource implements RESTResource {
     }
 
     @DELETE
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}")
     @ApiOperation(value = "Removes an item from the registry.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -384,6 +394,7 @@ public class ItemResource implements RESTResource {
     }
 
     @PUT
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}/tags/{tag}")
     @ApiOperation(value = "Adds a tag to an item.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -410,6 +421,7 @@ public class ItemResource implements RESTResource {
     }
 
     @DELETE
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}/tags/{tag}")
     @ApiOperation(value = "Removes a tag from an item.")
     @ApiResponses(value = { @ApiResponse(code = 200, message = "OK"),
@@ -443,6 +455,7 @@ public class ItemResource implements RESTResource {
      * @return
      */
     @PUT
+    @RolesAllowed({ Role.ADMIN })
     @Path("/{itemname: [a-zA-Z_0-9]*}")
     @Consumes(MediaType.APPLICATION_JSON)
     @ApiOperation(value = "Adds a new item to the registry or updates the existing item.")
@@ -558,5 +571,11 @@ public class ItemResource implements RESTResource {
             }
         }
         return beans;
+    }
+
+    @Override
+    public boolean isSatisfied() {
+        return itemRegistry != null && managedItemProvider != null && eventPublisher != null
+                && !itemFactories.isEmpty();
     }
 }

@@ -22,6 +22,9 @@
 
     <bundle>mvn:org.eclipse.smarthome.core/org.eclipse.smarthome.core/${project.version}</bundle>
     <capability>
+      osgi.service;objectClass=org.eclipse.smarthome.core.i18n.I18nProvider
+    </capability>
+    <capability>
       osgi.service;objectClass=org.eclipse.smarthome.core.items.ItemRegistry
     </capability>
 
@@ -41,6 +44,12 @@
 
     <bundle start-level="75">mvn:org.eclipse.smarthome.core/org.eclipse.smarthome.core.thing.xml/${project.version}</bundle>
     <bundle>mvn:org.eclipse.smarthome.core/org.eclipse.smarthome.core.transform/${project.version}</bundle>
+
+    <bundle>mvn:org.eclipse.smarthome.core/org.eclipse.smarthome.core.audio/${project.version}</bundle>
+    <capability>
+      osgi.service;objectClass=org.eclipse.smarthome.core.audio.AudioHTTPServer
+    </capability>
+
     <bundle>mvn:org.eclipse.smarthome.core/org.eclipse.smarthome.core.voice/${project.version}</bundle>
     <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.console/${project.version}</bundle>
     <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.monitor/${project.version}</bundle>
@@ -52,6 +61,11 @@
   </feature>
 
   <!-- optional ESH bundles -->
+
+  <feature name="esh-auth-jaas" version="${project.version}">
+    <feature>esh-base</feature>
+    <bundle>mvn:org.eclipse.smarthome.auth/org.eclipse.smarthome.auth.jaas/${project.version}</bundle>
+  </feature>
 
   <feature name="esh-automation-api" version="${project.version}">
     <feature>esh-base</feature>
@@ -88,6 +102,12 @@
     <feature dependency="true">esh-automation-api</feature>
     <feature dependency="true">esh-automation-module-script</feature>
     <bundle>mvn:org.eclipse.smarthome.automation/org.eclipse.smarthome.automation.module.script.defaultscope/${project.version}</bundle>
+  </feature>
+
+  <feature name="esh-automation-module-media" version="${project.version}">
+    <feature>esh-base</feature>
+    <feature dependency="true">esh-automation-api</feature>
+    <bundle>mvn:org.eclipse.smarthome.automation/org.eclipse.smarthome.automation.module.media/${project.version}</bundle>
   </feature>
 
   <feature name="esh-automation-module-timer" version="${project.version}">
@@ -166,16 +186,43 @@
     <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.console.karaf/${project.version}</bundle>
   </feature>
 
+  <feature name="esh-io-rest-auth" version="${project.version}">
+    <feature>esh-base</feature>
+    <feature>esh-tp-jax-rs-provider-security</feature>
+    <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.rest.auth/${project.version}</bundle>
+  </feature>
+
+  <feature name="esh-io-rest-auth-basic" version="${project.version}">
+    <feature>esh-base</feature>
+    <feature>esh-io-rest-auth</feature>
+    <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.rest.auth.basic/${project.version}</bundle>
+  </feature>
+
+  <feature name="esh-io-rest-log" version="${project.version}">
+    <feature>esh-base</feature>
+    <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.rest.log/${project.version}</bundle>
+  </feature>
+
   <feature name="esh-io-rest-sitemap" version="${project.version}">
     <feature>esh-base</feature>
     <feature>esh-ui</feature>
     <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.rest.sitemap/${project.version}</bundle>
   </feature>
 
+  <feature name="esh-io-rest-voice" version="${project.version}">
+    <feature>esh-base</feature>
+    <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.rest.voice/${project.version}</bundle>
+  </feature>
+
   <feature name="esh-io-rest-mdns" version="${project.version}">
     <feature>esh-base</feature>
     <feature>esh-io-transport-mdns</feature>
     <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.rest.mdns/${project.version}</bundle>
+  </feature>
+
+  <feature name="esh-io-transport-dbus" version="${project.version}">
+    <feature>esh-base</feature>
+    <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.transport.dbus/${project.version}</bundle>
   </feature>
 
   <feature name="esh-io-transport-mdns" version="${project.version}">
@@ -282,6 +329,11 @@
     <bundle dependency="true">mvn:org.mapdb/mapdb/1.0.9</bundle>
   </feature>
 
+  <feature name="esh-storage-json" version="${project.version}">
+    <feature>esh-base</feature>
+    <bundle>mvn:org.eclipse.smarthome.storage/org.eclipse.smarthome.storage.json/${project.version}</bundle>
+  </feature>
+
   <feature name="esh-transform-exec" description="Exec Transformation" version="${project.version}">
     <feature>esh-base</feature>
     <bundle>mvn:org.eclipse.smarthome.transform/org.eclipse.smarthome.transform.exec/${project.version}</bundle>
@@ -335,6 +387,7 @@
   <feature name="esh-ui-basic" version="${project.version}">
     <feature>esh-base</feature>
     <feature>esh-ui</feature>
+    <feature dependency="true">esh-io-rest-sitemap</feature>
     <bundle>mvn:org.eclipse.smarthome.extension.ui/org.eclipse.smarthome.ui.basic/${project.version}</bundle>
   </feature>
 
@@ -363,6 +416,11 @@
   <feature name="esh-io-javasound" description="JavaSound Audio Support" version="${project.version}">
     <feature>esh-base</feature>
     <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.javasound/${project.version}</bundle>
+  </feature>
+
+  <feature name="esh-io-webaudio" description="Web Audio Support" version="${project.version}">
+    <feature>esh-base</feature>
+    <bundle>mvn:org.eclipse.smarthome.io/org.eclipse.smarthome.io.webaudio/${project.version}</bundle>
   </feature>
 
   <feature name="esh-voice-mactts" description="MacOS Text-to-Speech" version="${project.version}">

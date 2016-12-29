@@ -1,9 +1,13 @@
-angular.module('PaperUI.controllers.control', []).controller('ControlPageController', function($scope, $routeParams, $location, $timeout, itemRepository, thingService, thingTypeService, channelTypeService, thingConfigService) {
+angular.module('PaperUI.controllers.control', []).controller('ControlPageController', function($scope, $routeParams, $location, $timeout, itemRepository, thingTypeRepository, thingService, thingTypeService, channelTypeService, thingConfigService) {
     $scope.items = [];
     $scope.selectedIndex = 0;
     $scope.tabs = [];
     $scope.things = [];
+    var thingTypes = [];
 
+    $scope.navigateTo = function(path) {
+        $location.path(path);
+    }
     $scope.next = function() {
         var newIndex = $scope.selectedIndex + 1;
         if (newIndex > ($scope.tabs.length - 1)) {
@@ -29,40 +33,57 @@ angular.module('PaperUI.controllers.control', []).controller('ControlPageControl
     $scope.thingTypes = [];
     $scope.thingChannels = [];
     $scope.isLoadComplete = false;
+    var thingList, thingCounter = 0;
     function getThings() {
         thingService.getAll().$promise.then(function(things) {
-            $scope.things = things;
+            thingList = things;
             $scope.isLoadComplete = false;
             thingTypeService.getAll().$promise.then(function(thingTypes) {
                 $scope.thingTypes = thingTypes;
                 channelTypeService.getAll().$promise.then(function(channels) {
                     $scope.channelTypes = channels;
-                    for (var i = 0; i < $scope.things.length;) {
-                        var thingType = $.grep($scope.thingTypes, function(thingType, j) {
-                            return thingType.UID == $scope.things[i].thingTypeUID;
-                        })[0];
-                        $scope.things[i].thingChannels = thingConfigService.getThingChannels($scope.things[i], thingType, $scope.channelTypes, true);
-                        angular.forEach($scope.things[i].thingChannels, function(value, key) {
-                            $scope.things[i].thingChannels[key].channels = $.grep($scope.things[i].thingChannels[key].channels, function(channel, i) {
-                                return channel.linkedItems.length > 0;
-                            });
-                        });
-                        if (!thingHasChannels(i)) {
-                            $scope.things.splice(i, 1);
-                        } else {
-                            i++;
-                        }
+                    for (var i = 0; i < thingList.length; i++) {
+                        var thingTypeUIDs = thingList[i].thingTypeUID;
+                        var enclosed = (function() {
+                            var thingTypeUID = thingTypeUIDs;
+                            var index = i;
+                            return function() {
+                                var thingTypeComplete = getThingTypeLocal(thingTypeUID);
+                                if (!thingTypeComplete) {
+                                    thingTypeService.getByUid({
+                                        thingTypeUID : thingTypeUID
+                                    }, function(thingType) {
+                                        thingTypes.push(thingType);
+                                        renderThing(thingList[index], thingType, $scope.channelTypes);
+                                    });
+                                } else {
+                                    renderThing(thingList[index], thingTypeComplete, $scope.channelTypes);
+                                }
+                            }
+                        })();
+                        enclosed();
                     }
-                    getTabs();
-                    $scope.isLoadComplete = true;
                 });
             });
 
         });
     }
-    function thingHasChannels(index) {
-        for (var i = 0; i < $scope.things[index].thingChannels.length; i++) {
-            if ($scope.things[index].thingChannels[i].channels && $scope.things[index].thingChannels[i].channels.length > 0) {
+    function renderThing(thing, thingType, channelTypes) {
+        thing.thingChannels = thingConfigService.getThingChannels(thing, thingType, channelTypes, true);
+        angular.forEach(thing.thingChannels, function(value, key) {
+            thing.thingChannels[key].channels = $.grep(thing.thingChannels[key].channels, function(channel, i) {
+                return channel.linkedItems.length > 0;
+            });
+        });
+        thingCounter++;
+        if (thingHasChannels(thing)) {
+            $scope.things.push(thing);
+        }
+        getTabs();
+    }
+    function thingHasChannels(thing) {
+        for (var i = 0; i < thing.thingChannels.length; i++) {
+            if (thing.thingChannels[i].channels && thing.thingChannels[i].channels.length > 0) {
                 return true;
             }
         }
@@ -70,7 +91,7 @@ angular.module('PaperUI.controllers.control', []).controller('ControlPageControl
     }
 
     function getTabs() {
-        if (!$scope.things) {
+        if (!$scope.things || (thingList.length != thingCounter)) {
             return;
         }
         var arr = [], otherTab = false;
@@ -93,6 +114,14 @@ angular.module('PaperUI.controllers.control', []).controller('ControlPageControl
                 name : "OTHER"
             });
         }
+        $scope.isLoadComplete = true;
+    }
+
+    function getThingTypeLocal(thingTypeUID) {
+        var thingTypeComplete = $.grep(thingTypes, function(thingType) {
+            return thingType.UID == thingTypeUID;
+        });
+        return thingTypeComplete.length > 0 ? thingTypeComplete : null;
     }
 
     $scope.tabComparator = function(actual, expected) {
@@ -172,7 +201,7 @@ angular.module('PaperUI.controllers.control', []).controller('ControlPageControl
 
         if (item.type === 'DateTime') {
             var date = new Date(item.state);
-            return $filter('date')(date, "dd.MM.yyyy hh:mm:ss");
+            return $filter('date')(date, "dd.MM.yyyy HH:mm:ss");
         } else if (!item.stateDescription || !item.stateDescription.pattern) {
             return state;
         } else {
@@ -498,7 +527,52 @@ angular.module('PaperUI.controllers.control', []).controller('ControlPageControl
     if ($scope.item.state === 'UNDEF' || $scope.item.state === 'NULL') {
         $scope.item.state = '-';
     }
-}).controller('PlayerItemController', function($scope) {
+}).controller('PlayerItemController', function($scope, $timeout) {
+
+    var isInterrupted, time;
+    $scope.onPrevDown = function() {
+        isInterrupted = false;
+        time = new Date().getTime();
+        $timeout(function() {
+            if (!isInterrupted) {
+                $scope.sendCommand('REWIND');
+            }
+        }, 300);
+    }
+
+    $scope.onPrevUp = function() {
+        var newTime = new Date().getTime();
+        if (time + 300 > newTime) {
+            isInterrupted = true;
+            $scope.sendCommand('PREVIOUS');
+        } else {
+            $timeout(function() {
+                $scope.sendCommand('PLAY');
+            });
+        }
+    }
+
+    $scope.onNextDown = function() {
+        isInterrupted = false;
+        time = new Date().getTime();
+        $timeout(function() {
+            if (!isInterrupted) {
+                $scope.sendCommand('FASTFORWARD');
+            }
+        }, 300);
+    }
+
+    $scope.onNextUp = function() {
+        var newTime = new Date().getTime();
+        if (time + 300 > newTime) {
+            isInterrupted = true;
+            $scope.sendCommand('NEXT');
+        } else {
+            $timeout(function() {
+                $scope.sendCommand('PLAY');
+            });
+        }
+    }
 
 }).controller('LocationItemController', function($scope, $sce) {
     $scope.init = function() {
@@ -508,7 +582,7 @@ angular.module('PaperUI.controllers.control', []).controller('ControlPageControl
             var bbox = (longitude - 0.01) + ',' + (latitude - 0.01) + ',' + (longitude + 0.01) + ',' + (latitude + 0.01);
             var marker = latitude + ',' + longitude;
             $scope.formattedState = latitude + '°N ' + longitude + '°E';
-            $scope.url = $sce.trustAsResourceUrl('http://www.openstreetmap.org/export/embed.html?bbox=' + bbox + '&marker=' + marker);
+            $scope.url = $sce.trustAsResourceUrl('https://www.openstreetmap.org/export/embed.html?bbox=' + bbox + '&marker=' + marker);
         } else {
             $scope.formattedState = '- °N - °E';
         }

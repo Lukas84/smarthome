@@ -79,10 +79,6 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
         templateUrl : 'partials/rules.html',
         controller : 'RulesPageController',
         title : 'Rules'
-    }).when('/rules/view/:ruleUID', {
-        templateUrl : 'partials/rules.html',
-        controller : 'RulesPageController',
-        title : 'Rules'
     }).when('/rules/configure/:ruleUID', {
         templateUrl : 'partials/rules.html',
         controller : 'RulesPageController',
@@ -247,6 +243,58 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
                     });
                 }
             }
+        }
+    };
+}).directive('copyclipboard', function(toastService) {
+    return {
+        restrict : 'A',
+        link : function(scope, element, attrs) {
+            element[0].addEventListener('click', function() {
+                var input = document.createElement("input");
+                input.value = attrs.copyclipboard;
+                var body = document.getElementsByTagName('body')[0];
+                body.appendChild(input);
+                input.select();
+                var isCopied = document.execCommand('copy');
+                if (isCopied) {
+                    toastService.showDefaultToast('Text copied to clipboard');
+                } else {
+                    toastService.showDefaultToast('Could not copy to clipboard');
+                }
+                body.removeChild(input);
+            });
+        }
+    };
+}).directive('longPress', function($timeout) {
+    return {
+        restrict : 'A',
+        link : function($scope, elem, $attrs) {
+            var timeoutHandler;
+            var longClicked = false;
+            elem[0].addEventListener('mousedown', function(evt) {
+                timeoutHandler = $timeout(function() {
+                    longClicked = true;
+                    if ($attrs.onLongPress) {
+                        $scope.$apply(function() {
+                            $scope.$eval($attrs.onLongPress, {
+                                $event : evt
+                            });
+                        });
+                    }
+                }, 400)
+            });
+
+            elem[0].addEventListener('mouseup', function(evt) {
+                $timeout.cancel(timeoutHandler);
+                if (!longClicked && $attrs.onClick) {
+                    $scope.$apply(function() {
+                        $scope.$eval($attrs.onClick, {
+                            $event : evt
+                        });
+                    });
+                }
+                longClicked = false;
+            });
         }
     };
 }).run([ '$location', '$rootScope', 'globalConfig', function($location, $rootScope, globalConfig) {

@@ -38,6 +38,7 @@ import org.eclipse.smarthome.core.thing.ThingTypeUID;
 import org.eclipse.smarthome.core.thing.ThingUID;
 import org.eclipse.smarthome.core.thing.binding.BaseThingHandler;
 import org.eclipse.smarthome.core.types.Command;
+import org.eclipse.smarthome.core.types.RefreshType;
 import org.eclipse.smarthome.core.types.State;
 import org.eclipse.smarthome.io.transport.upnp.UpnpIOParticipant;
 import org.eclipse.smarthome.io.transport.upnp.UpnpIOService;
@@ -62,6 +63,8 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
     public final static Set<ThingTypeUID> SUPPORTED_THING_TYPES = Sets.newHashSet(THING_TYPE_SOCKET, THING_TYPE_INSIGHT,
             THING_TYPE_LIGHTSWITCH, THING_TYPE_MOTION);
 
+    private Map<String, Boolean> subscriptionState = new HashMap<String, Boolean>();
+
     private Map<String, String> stateMap = Collections.synchronizedMap(new HashMap<String, String>());
 
     protected final static int SUBSCRIPTION_DURATION = 600;
@@ -80,7 +83,13 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
         @Override
         public void run() {
             try {
+                if (!isUpnpDeviceRegistered()) {
+                    logger.debug("WeMo UPnP device {} not yet registered", getUDN());
+                }
+
                 updateWemoState();
+                onSubscription();
+
             } catch (Exception e) {
                 logger.debug("Exception during poll : {}", e);
             }
@@ -98,6 +107,7 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
         } else {
             logger.debug("upnpIOService not set.");
         }
+
     }
 
     @Override
@@ -152,7 +162,14 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
     @Override
     public void handleCommand(ChannelUID channelUID, Command command) {
         logger.trace("Command '{}' received for channel '{}'", command, channelUID);
-        if (channelUID.getId().equals(CHANNEL_STATE)) {
+
+        if (command instanceof RefreshType) {
+            try {
+                updateWemoState();
+            } catch (Exception e) {
+                logger.debug("Exception during poll : {}", e);
+            }
+        } else if (channelUID.getId().equals(CHANNEL_STATE)) {
             if (command instanceof OnOffType) {
 
                 try {
@@ -190,6 +207,8 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
 
     @Override
     public void onServiceSubscribed(String service, boolean succeeded) {
+        logger.debug("WeMo {}: Subscription to service {} {}", getUDN(), service, succeeded ? "succeeded" : "failed");
+        subscriptionState.put(service, succeeded);
     }
 
     @Override
@@ -317,6 +336,10 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
             if (state != null) {
                 if (getThing().getThingTypeUID().getId().equals("motion")) {
                     updateState(CHANNEL_MOTIONDETECTION, state);
+                    if (state.equals(OnOffType.ON)) {
+                        State lastMotionDetected = new DateTimeType();
+                        updateState(CHANNEL_LASTMOTIONDETECTED, lastMotionDetected);
+                    }
                 } else {
                     updateState(CHANNEL_STATE, state);
                 }
@@ -326,44 +349,66 @@ public class WemoHandler extends BaseThingHandler implements UpnpIOParticipant, 
 
     private synchronized void onSubscription() {
         if (service.isRegistered(this)) {
-            logger.debug("Setting up WeMo GENA subscription for '{}'", this);
+            logger.debug("Checking WeMo GENA subscription for '{}'", this);
 
             ThingTypeUID thingTypeUID = thing.getThingTypeUID();
+            String subscription = null;
 
             if (thingTypeUID.equals(THING_TYPE_INSIGHT)) {
-                service.addSubscription(this, "insight1", SUBSCRIPTION_DURATION);
+                subscription = "insight1";
             } else {
-                service.addSubscription(this, "basicevent1", SUBSCRIPTION_DURATION);
+                subscription = "basicevent1";
             }
+
+            if ((subscriptionState.get(subscription) == null) || !subscriptionState.get(subscription).booleanValue()) {
+                logger.debug("Setting up GENA subscription {}: Subscribing to service {}...", getUDN(), subscription);
+                service.addSubscription(this, subscription, SUBSCRIPTION_DURATION);
+                subscriptionState.put(subscription, true);
+            }
+
+        } else {
+            logger.debug("Setting up WeMo GENA subscription for '{}' FAILED - service.isRegistered(this) is FALSE",
+                    this);
         }
     }
 
     private synchronized void removeSubscription() {
         logger.debug("Removing WeMo GENA subscription for '{}'", this);
+
         if (service.isRegistered(this)) {
             ThingTypeUID thingTypeUID = thing.getThingTypeUID();
+            String subscription = null;
 
             if (thingTypeUID.equals(THING_TYPE_INSIGHT)) {
-                service.removeSubscription(this, "insight1");
+                subscription = "insight1";
             } else {
-                service.removeSubscription(this, "basicevent1");
+                subscription = "basicevent1";
             }
+
+            if ((subscriptionState.get(subscription) != null) && subscriptionState.get(subscription).booleanValue()) {
+                logger.debug("WeMo {}: Unsubscribing from service {}...", getUDN(), subscription);
+                service.removeSubscription(this, subscription);
+            }
+
+            subscriptionState = new HashMap<String, Boolean>();
             service.unregisterParticipant(this);
         }
     }
 
     private synchronized void onUpdate() {
-        if (service.isRegistered(this)) {
-            if (refreshJob == null || refreshJob.isCancelled()) {
-                Configuration config = getThing().getConfiguration();
-                int refreshInterval = DEFAULT_REFRESH_INTERVAL;
-                Object refreshConfig = config.get("refresh");
-                if (refreshConfig != null) {
-                    refreshInterval = ((BigDecimal) refreshConfig).intValue();
-                }
-                refreshJob = scheduler.scheduleAtFixedRate(refreshRunnable, 0, refreshInterval, TimeUnit.SECONDS);
+        if (refreshJob == null || refreshJob.isCancelled()) {
+            Configuration config = getThing().getConfiguration();
+            int refreshInterval = DEFAULT_REFRESH_INTERVAL;
+            Object refreshConfig = config.get("refresh");
+            if (refreshConfig != null) {
+                refreshInterval = ((BigDecimal) refreshConfig).intValue();
             }
+            refreshJob = scheduler.scheduleAtFixedRate(refreshRunnable, 0, refreshInterval, TimeUnit.SECONDS);
         }
+    }
+
+    private boolean isUpnpDeviceRegistered() {
+        return service.isRegistered(this);
     }
 
     @Override

@@ -84,8 +84,8 @@ public class LifxLightDiscovery extends AbstractDiscoveryService {
     private ScheduledFuture<?> networkJob;
 
     public LifxLightDiscovery() throws IllegalArgumentException {
-        super(Sets.newHashSet(LifxBindingConstants.THING_TYPE_COLORLIGHT, LifxBindingConstants.THING_TYPE_WHITELIGHT),
-                1, true);
+        super(Sets.newHashSet(LifxBindingConstants.THING_TYPE_COLORLIGHT, LifxBindingConstants.THING_TYPE_COLORIRLIGHT,
+                LifxBindingConstants.THING_TYPE_WHITELIGHT), 1, true);
     }
 
     @Override
@@ -280,7 +280,7 @@ public class LifxLightDiscovery extends AbstractDiscoveryService {
             }
 
         } catch (Exception e) {
-            logger.error("An exception occurred while communicating with the bulb : '{}'", e.getMessage());
+            logger.error("An exception occurred while communicating with the light : '{}'", e.getMessage());
         }
 
         return result;
@@ -392,7 +392,7 @@ public class LifxLightDiscovery extends AbstractDiscoveryService {
                             SelectionKey unicastKey = unicastChannel.register(selector,
                                     SelectionKey.OP_READ | SelectionKey.OP_WRITE);
                             unicastChannel.connect(csp.ipaddress);
-                            logger.trace("Connected to a bulb via {}", unicastChannel.getLocalAddress().toString());
+                            logger.trace("Connected to a light via {}", unicastChannel.getLocalAddress().toString());
 
                             GetVersionRequest versionPacket = new GetVersionRequest();
                             versionPacket.setTarget(csp.target);
@@ -407,7 +407,7 @@ public class LifxLightDiscovery extends AbstractDiscoveryService {
                 }
                 isScanning = false;
             } catch (Exception e) {
-                logger.error("An exception orccurred while communicating with the bulb : '{}'", e.getMessage(), e);
+                logger.error("An exception orccurred while communicating with the light : '{}'", e.getMessage(), e);
             }
         }
     };
@@ -457,7 +457,7 @@ public class LifxLightDiscovery extends AbstractDiscoveryService {
         MACAddress discoveredAddress = packet.getTarget();
         try {
             Products product = Products.getProductFromProductID(returnedPacket.getProduct());
-            ThingUID thingUID = getUID(discoveredAddress.getAsLabel(), product.isColor());
+            ThingUID thingUID = getUID(discoveredAddress.getAsLabel(), product.isColor(), product.isInfrared());
 
             String label = "";
 
@@ -476,9 +476,13 @@ public class LifxLightDiscovery extends AbstractDiscoveryService {
         }
     }
 
-    private ThingUID getUID(String hex, boolean color) {
+    private ThingUID getUID(String hex, boolean color, boolean infrared) {
         if (color) {
-            return new ThingUID(LifxBindingConstants.THING_TYPE_COLORLIGHT, hex);
+            if (infrared) {
+                return new ThingUID(LifxBindingConstants.THING_TYPE_COLORIRLIGHT, hex);
+            } else {
+                return new ThingUID(LifxBindingConstants.THING_TYPE_COLORLIGHT, hex);
+            }
         } else {
             return new ThingUID(LifxBindingConstants.THING_TYPE_WHITELIGHT, hex);
         }
