@@ -1,10 +1,22 @@
 angular.module('PaperUI.controllers.configuration').controller('ItemSetupController', function($scope, $timeout, $mdDialog, $filter, itemService, toastService, sharedProperties) {
     $scope.setSubtitle([ 'Items' ]);
     $scope.setHeaderText('Shows all configured Items.');
-    $scope.items = [];
+    $scope.items = [], $scope.groups = [], $scope.types = [];
+
     $scope.refresh = function() {
         itemService.getAll(function(items) {
             $scope.items = items;
+            var groups = [], types = [];
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].type && items[i].type == "Group") {
+                    groups.push(items[i]);
+                }
+                if (items[i].type && types.indexOf(items[i].type) == -1) {
+                    types.push(items[i].type);
+                }
+            }
+            $scope.groups = groups;
+            $scope.types = types;
         });
 
     };
@@ -12,7 +24,7 @@ angular.module('PaperUI.controllers.configuration').controller('ItemSetupControl
         event.stopImmediatePropagation();
         $mdDialog.show({
             controller : 'ItemRemoveController',
-            templateUrl : 'partials/dialog.removeitem.html',
+            templateUrl : 'partials/dialog.remove.html',
             targetEvent : event,
             hasBackdrop : true,
             locals : {
@@ -25,6 +37,18 @@ angular.module('PaperUI.controllers.configuration').controller('ItemSetupControl
     $scope.getSrcURL = function(category, type) {
         return category ? '../icon/' + category.toLowerCase() : type ? '../icon/' + type.toLowerCase().replace('item', '') : '';
     }
+    $scope.clearAll = function() {
+        $scope.searchText = "";
+        $scope.$broadcast("ClearFilters");
+    }
+    $scope.createItem = function(selectedType, selectedGroup) {
+        sharedProperties.updateParams({
+            selectedType : selectedType,
+            selectedGroup : selectedGroup ? selectedGroup.name : ''
+        });
+        $scope.navigateTo('item/create')
+    }
+
     $scope.refresh();
 }).controller('ItemConfigController', function($scope, $mdDialog, $filter, $location, toastService, itemService, itemConfig, itemRepository, sharedProperties) {
     $scope.items = [];
@@ -81,10 +105,20 @@ angular.module('PaperUI.controllers.configuration').controller('ItemSetupControl
             if ($scope.types.length > 0) {
                 $scope.item.type = $scope.types[0];
             }
-            if (sharedProperties.getParams().length > 0 && sharedProperties.getParams()[0].linking) {
-                $scope.item.name = sharedProperties.getParams()[0].suggestedName;
-                $scope.item.label = sharedProperties.getParams()[0].suggestedLabel;
-                $scope.item.category = sharedProperties.getParams()[0].suggestedCategory;
+            if (sharedProperties.getParams().length > 0) {
+                if (sharedProperties.getParams()[0].linking) {
+                    $scope.item.name = sharedProperties.getParams()[0].suggestedName;
+                    $scope.item.label = sharedProperties.getParams()[0].suggestedLabel;
+                    $scope.item.category = sharedProperties.getParams()[0].suggestedCategory;
+                } else {
+                    if (sharedProperties.getParams()[0].selectedType) {
+                        $scope.item.type = sharedProperties.getParams()[0].selectedType;
+                    }
+                    if (sharedProperties.getParams()[0].selectedGroup) {
+                        $scope.item.groupNames = $scope.item.groupNames ? $scope.item.groupNames : [];
+                        $scope.item.groupNames.push(sharedProperties.getParams()[0].selectedGroup);
+                    }
+                }
             }
             $scope.configMode = "create";
 
@@ -107,6 +141,9 @@ angular.module('PaperUI.controllers.configuration').controller('ItemSetupControl
             setItemToFunction();
         }
         if (JSON.stringify($scope.item) !== JSON.stringify(originalItem)) {
+            if ($scope.item.category == "") {
+                $scope.item.category = null;
+            }
             itemService.create({
                 itemName : $scope.item.name
             }, $scope.item).$promise.then(function() {

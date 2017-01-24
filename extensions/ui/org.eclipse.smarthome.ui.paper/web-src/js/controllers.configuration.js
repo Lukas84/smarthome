@@ -250,13 +250,21 @@ angular.module('PaperUI.controllers.configuration', [ 'PaperUI.constants' ]).con
             $scope.configuration = configService.getConfigAsObject($scope.configArray, $scope.parameters);
         }
     });
-}).controller('ThingController', function($scope, $timeout, $mdDialog, thingRepository, thingService, toastService) {
+}).controller('ThingController', function($scope, $timeout, $mdDialog, thingRepository, bindingRepository, thingService, toastService) {
     $scope.setSubtitle([ 'Things' ]);
     $scope.setHeaderText('Shows all configured Things.');
     $scope.newThingUID = window.localStorage.getItem('thingUID');
-    window.localStorage.removeItem('thingUID')
+    window.localStorage.removeItem('thingUID');
+    $scope.things;
     $scope.refresh = function() {
-        thingRepository.getAll(true);
+        bindingRepository.getAll(true);
+        thingRepository.getAll(function(things) {
+            for (var i = 0; i < things.length; i++) {
+                things[i].bindingType = things[i].thingTypeUID.split(':')[0];
+            }
+            $scope.things = things;
+            refreshBindings();
+        });
     }
     $scope.remove = function(thing, event) {
         event.stopImmediatePropagation();
@@ -271,6 +279,30 @@ angular.module('PaperUI.controllers.configuration', [ 'PaperUI.constants' ]).con
         }).then(function() {
             $scope.refresh();
         });
+    }
+    $scope.clearAll = function() {
+        $scope.searchText = "";
+        $scope.$broadcast("ClearFilters");
+    }
+    $scope.$watch("things", function() {
+        refreshBindings();
+    })
+    function refreshBindings() {
+        $scope.bindings = [];
+        if ($scope.data && $scope.data.bindings && $scope.data.bindings.length > 0) {
+            var arr = [];
+            if ($scope.things) {
+                for (var i = 0; i < $scope.data.bindings.length; i++) {
+                    var a = $.grep($scope.things, function(result) {
+                        return result.bindingType == $scope.data.bindings[i].id;
+                    });
+                    if (a.length > 0) {
+                        $scope.bindings.push($scope.data.bindings[i]);
+                    }
+
+                }
+            }
+        }
     }
     $scope.refresh();
 }).controller('ViewThingController', function($scope, $mdDialog, toastService, thingTypeService, thingRepository, thingService, linkService, channelTypeService, configService, thingConfigService, util, itemRepository) {

@@ -62,6 +62,9 @@ import org.osgi.framework.InvalidSyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
 /**
  * This class is used to initialized and execute {@link Rule}s added in rule engine. Each Rule has associated
  * {@link RuleStatusInfo} object which shows status and status details of of the Rule. The states are self excluded and
@@ -155,6 +158,8 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
     private Map<String, Future> scheduleTasks = new HashMap<String, Future>(31);
 
     private ScheduledExecutorService executor;
+
+    private Gson gson;
 
     /**
      * Constructor of {@link RuleEngine}. It initializes the logger and starts tracker for {@link ModuleHandlerFactory}
@@ -285,7 +290,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
     }
 
     private synchronized void updateModuleHandlerFactoryMap(Collection<String> removedTypes) {
-        for (Iterator< String>it = removedTypes.iterator(); it.hasNext();) {
+        for (Iterator<String> it = removedTypes.iterator(); it.hasNext();) {
             String moduleTypeName = it.next();
             moduleHandlerFactories.remove(moduleTypeName);
         }
@@ -377,15 +382,18 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         }
 
         List<Module> modules = runtimeRule.getModules(null);
+        if (modules != null) {
+            for (Module m : modules) {
+                updateMapModuleTypeToRule(rUID, m.getTypeUID());
+            }
+        }
+
         String errMsgs;
         try {
-            resolveConfiguration(runtimeRule);
             validateModuleIDs(modules);
-
+            resolveConfiguration(runtimeRule);
             autoMapConnections(runtimeRule);
-
             ConnectionValidator.validateConnections(runtimeRule);
-            setDefaultConfigurationValues(modules);
         } catch (RuntimeException e) {
             errMsgs = "\n Validation of rule " + rUID + " has failed! " + e.getLocalizedMessage();
             // change state to NOTINITIALIZED
@@ -396,7 +404,6 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
 
         errMsgs = setModuleHandlers(rUID, modules);
         if (errMsgs == null) {
-            resolveDefaultValues(runtimeRule);
             register(runtimeRule);
             // change state to IDLE
             setRuleStatusInfo(rUID, new RuleStatusInfo(RuleStatus.IDLE));
@@ -459,7 +466,6 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         StringBuffer sb = null;
         if (modules != null) {
             for (T m : modules) {
-                updateMapModuleTypeToRule(rUID, m.getTypeUID());
                 try {
                     ModuleHandler moduleHandler = getModuleHandler(m, rUID);
                     if (moduleHandler != null) {
@@ -482,7 +488,8 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
                     if (sb == null) {
                         sb = new StringBuffer();
                     }
-                    String message = "Getting handler '" + m.getTypeUID() + "' for module '" + m.getId() + "' fails";
+                    String message = "Getting handler '" + m.getTypeUID() + "' for module '" + m.getId() + "' failed: "
+                            + t.getMessage();
                     sb.append(message).append("\n");
                     logger.trace(message);
                 }
@@ -550,7 +557,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
      */
     private void register(RuntimeRule rule) {
         RuleEngineCallback reCallback = getRuleEngineCallback(rule);
-        for (Iterator< Trigger>it = rule.getTriggers().iterator(); it.hasNext();) {
+        for (Iterator<Trigger> it = rule.getTriggers().iterator(); it.hasNext();) {
             RuntimeTrigger t = (RuntimeTrigger) it.next();
             TriggerHandler triggerHandler = t.getModuleHandler();
             triggerHandler.setRuleEngineCallback(reCallback);
@@ -643,7 +650,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
     private RuntimeRule removeRuleEntry(RuntimeRule r) {
         unregister(r);
         synchronized (this) {
-            for (Iterator< Map.Entry<String, Set<String>>>it = mapModuleTypeToRules.entrySet().iterator(); it
+            for (Iterator<Map.Entry<String, Set<String>>> it = mapModuleTypeToRules.entrySet().iterator(); it
                     .hasNext();) {
                 Map.Entry<String, Set<String>> e = it.next();
                 Set<String> rules = e.getValue();
@@ -710,7 +717,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
 
     private void addNewModuleTypes(ModuleHandlerFactory mhf, Collection<String> moduleTypes) {
         Set<String> notInitailizedRules = null;
-        for (Iterator< String>it = moduleTypes.iterator(); it.hasNext();) {
+        for (Iterator<String> it = moduleTypes.iterator(); it.hasNext();) {
             String moduleTypeName = it.next();
             Set<String> rules = null;
             synchronized (this) {
@@ -757,7 +764,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
 
     private void removeMissingModuleTypes(Collection<String> moduleTypes) {
         Map<String, List<String>> mapMissingHandlers = null;
-        for (Iterator< String>it = moduleTypes.iterator(); it.hasNext();) {
+        for (Iterator<String> it = moduleTypes.iterator(); it.hasNext();) {
             String moduleTypeName = it.next();
             Set<String> rules = null;
             synchronized (this) {
@@ -818,7 +825,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         synchronized (this) {
             final RuleStatus ruleStatus = getRuleStatus(rUID);
             if (ruleStatus != RuleStatus.IDLE) {
-                logger.error("Trying to execute rule ‘{}' with status '{}'", rUID, ruleStatus.getValue());
+                logger.error("Failed to execute rule ‘{}' with status '{}'", rUID, ruleStatus.name());
                 return;
             }
             // change state to RUNNING
@@ -831,7 +838,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
             setTriggerOutputs(rUID, td);
             boolean isSatisfied = calculateConditions(rule);
             if (isSatisfied) {
-                executeActions(rule);
+                executeActions(rule, true);
                 logger.debug("The rule '{}' is executed.", rUID);
             } else {
                 logger.debug("The rule '{}' is NOT executed, since it has unsatisfied conditions.", rUID);
@@ -843,6 +850,38 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         synchronized (this) {
             if (getRuleStatus(rUID) == RuleStatus.RUNNING) {
                 setRuleStatusInfo(rUID, new RuleStatusInfo(RuleStatus.IDLE));
+            }
+        }
+    }
+
+    protected void runNow(String ruleUID) {
+        RuntimeRule rule = getRuntimeRule(ruleUID);
+        if (rule == null) {
+            logger.warn("Fail to execute rule '{}': {}", ruleUID, "Invalid Rule UID.");
+            return;
+        }
+
+        synchronized (this) {
+            final RuleStatus ruleStatus = getRuleStatus(ruleUID);
+            if (ruleStatus != RuleStatus.IDLE) {
+                logger.error("Failed to execute rule ‘{}' with status '{}'", ruleUID, ruleStatus.name());
+                return;
+            }
+            // change state to RUNNING
+            setRuleStatusInfo(ruleUID, new RuleStatusInfo(RuleStatus.RUNNING));
+        }
+
+        try {
+            clearContext(rule);
+            executeActions(rule, false);
+            logger.debug("The rule '{}' is executed.", ruleUID);
+        } catch (Throwable t) {
+            logger.error("Fail to execute rule '{}': {}", new Object[] { ruleUID, t.getMessage() }, t);
+        }
+        // change state to IDLE only if the rule has not been DISABLED.
+        synchronized (this) {
+            if (getRuleStatus(ruleUID) == RuleStatus.RUNNING) {
+                setRuleStatusInfo(ruleUID, new RuleStatusInfo(RuleStatus.IDLE));
             }
         }
     }
@@ -927,7 +966,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
             return true;
         }
         RuleStatus ruleStatus = null;
-        for (Iterator< Condition>it = conditions.iterator(); it.hasNext();) {
+        for (Iterator<Condition> it = conditions.iterator(); it.hasNext();) {
             ruleStatus = getRuleStatus(rule.getUID());
             if (ruleStatus != RuleStatus.RUNNING) {
                 return false;
@@ -949,31 +988,38 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
      *
      * @param rule executed rule.
      */
-    private void executeActions(Rule rule) {
+    private void executeActions(Rule rule, boolean stopOnFirstFail) {
         List<Action> actions = ((RuntimeRule) rule).getActions();
         if (actions == null || actions.size() == 0) {
             return;
         }
         RuleStatus ruleStatus = null;
-        for (Iterator< Action>it = actions.iterator(); it.hasNext();) {
+        RuntimeAction action = null;
+        for (Iterator<Action> it = actions.iterator(); it.hasNext();) {
             ruleStatus = getRuleStatus(rule.getUID());
             if (ruleStatus != RuleStatus.RUNNING) {
                 return;
             }
-            RuntimeAction a = (RuntimeAction) it.next();
-            ActionHandler aHandler = a.getModuleHandler();
+            action = (RuntimeAction) it.next();
+            ActionHandler aHandler = action.getModuleHandler();
+            String rUID = rule.getUID();
+            Map<String, Object> context = getContext(rUID, action.getConnections());
             try {
-                String rUID = rule.getUID();
-                Map<String, Object> context = getContext(rUID, a.getConnections());
+
                 Map<String, ?> outputs = aHandler.execute(context);
                 if (outputs != null) {
                     context = getContext(rUID);
-                    updateContext(rUID, a.getId(), outputs);
+                    updateContext(rUID, action.getId(), outputs);
                 }
             } catch (Throwable t) {
-                logger.error("Fail to execute the action: " + a.getId(), t);
+                String errMessage = "Fail to execute action: " + action != null ? action.getId() : "<unknown>";
+                if (stopOnFirstFail) {
+                    RuntimeException re = new RuntimeException(errMessage, t);
+                    throw re;
+                } else {
+                    logger.warn(errMessage, t);
+                }
             }
-
         }
 
     }
@@ -984,7 +1030,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
     public synchronized void dispose() {
         if (!isDisposed) {
             isDisposed = true;
-            for (Iterator< RuntimeRule>it = rules.values().iterator(); it.hasNext();) {
+            for (Iterator<RuntimeRule> it = rules.values().iterator(); it.hasNext();) {
                 RuntimeRule r = it.next();
                 removeRuleEntry(r);
                 it.remove();
@@ -1043,7 +1089,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         if (rules != null) {
             Set<String> col = rules.keySet();
             if (col != null) {
-                for (Iterator< String>it = col.iterator(); it.hasNext();) {
+                for (Iterator<String> it = col.iterator(); it.hasNext();) {
                     String rUID = it.next();
                     if (rUID != null && rUID.startsWith(ID_PREFIX)) {
                         String sNum = rUID.substring(ID_PREFIX.length());
@@ -1070,56 +1116,6 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         this.statusInfoCallback = statusInfoCallback;
     }
 
-    private void resolveDefaultValues(RuntimeRule r) {
-        setDefaultAndNormalizeConfigValues(r.getUID(), r.getTriggers());
-        setDefaultAndNormalizeConfigValues(r.getUID(), r.getConditions());
-        setDefaultAndNormalizeConfigValues(r.getUID(), r.getActions());
-    }
-
-    private <T extends Module> void setDefaultAndNormalizeConfigValues(String ruleUID, List<T> modules) {
-        for (T module : modules) {
-            Configuration moduleConfiguration = module.getConfiguration();
-            String typeId = module.getTypeUID();
-            ModuleType mt = mtRegistry.get(typeId);
-            List<ConfigDescriptionParameter> configDescriptions = mt.getConfigurationDescriptions();
-            if (configDescriptions != null) {
-                for (ConfigDescriptionParameter configDescription : configDescriptions) {
-                    String defaultValue = configDescription.getDefault();
-                    String configName = configDescription.getName();
-                    Object configValue = moduleConfiguration.get(configName);
-                    if (configValue == null) {
-                        if (defaultValue != null) {
-                            moduleConfiguration.put(configName,
-                                    ConfigUtil.normalizeType(defaultValue, configDescription));
-                        }
-                    } else {
-                        moduleConfiguration.put(configName, ConfigUtil.normalizeType(configValue, configDescription));
-                    }
-                } // for
-            }
-
-            List<Output> outputs = null;
-            if (mt instanceof TriggerType) {
-                outputs = ((TriggerType) mt).getOutputs();
-            } else if (mt instanceof ActionType) {
-                outputs = ((ActionType) mt).getOutputs();
-            }
-
-            if (outputs != null) {
-                Map<String, Object> result = new HashMap<String, Object>(11);
-                for (Output output : outputs) {
-                    Object defaultValue = output.getDefaultValue();
-                    if (defaultValue != null) {
-                        result.put(output.getName(), defaultValue);
-                    }
-                }
-                if (result.size() > 0) {
-                    updateContext(ruleUID, module.getId(), result);
-                }
-            }
-        }
-    }
-
     private ScheduledExecutorService getScheduledExecutor() {
         if (executor == null || executor.isShutdown()) {
             executor = Executors.newSingleThreadScheduledExecutor();
@@ -1141,74 +1137,6 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
             }
         } else {
             scheduleReinitializationDelay = DEFAULT_REINITIALIZATION_DELAY;
-        }
-    }
-
-    /**
-     * The method sets default configuration values for these configuration properties which are not specified in the
-     * rule
-     * definition but have default values defined in module type definition.
-     *
-     * @param modules
-     *
-     * @param module checked module
-     * @throws IllegalArgumentException when passed module has a required configuration property and it is not specified
-     *             in rule definition nor in the module's module type definition.
-     */
-    private void setDefaultConfigurationValues(List<Module> modules) {
-        for (Module module : modules) {
-            String type = module.getTypeUID();
-            if (mtRegistry != null) {
-                Configuration mConfig = module.getConfiguration();
-                if (mConfig == null) {
-                    mConfig = new Configuration();
-                }
-                ModuleType mt = mtRegistry.get(type);
-                if (mt != null) {
-                    List<ConfigDescriptionParameter> configDescriptions = mt.getConfigurationDescriptions();
-                    for (ConfigDescriptionParameter cftDesc : configDescriptions) {
-                        String parameterName = cftDesc.getName();
-                        if (mConfig.get(parameterName) == null) {
-                            String strValue = cftDesc.getDefault();
-                            if (strValue != null) {
-                                Type t = cftDesc.getType();
-                                Object defValue = getDefaultValue(t, strValue);
-                                mConfig.put(parameterName, defValue);
-                            } else {
-                                if (cftDesc.isRequired()) {
-                                    throw new RuntimeException(
-                                            "Missing required parameter: " + parameterName + " of type " + type);
-                                }
-                            }
-                        }
-                    }
-                }
-                module.setConfiguration(mConfig);
-            } else {
-                logger.warn("Can't get module type definition for:" + type + ". Missing ModuleTypeManager");
-            }
-        }
-    }
-
-    /**
-     * The method parses string presentation of default value
-     *
-     * @param type type of default object
-     * @param value string presentation of default object
-     * @return default value
-     */
-    private Object getDefaultValue(Type type, String value) {
-        switch (type) {
-            case BOOLEAN:
-                return Boolean.valueOf(value);
-            case INTEGER:
-                return Integer.valueOf(value);
-            case DECIMAL:
-                return new BigDecimal(value);
-            case TEXT:
-                return value;
-            default:
-                return null;
         }
     }
 
@@ -1396,6 +1324,7 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
             handleModuleConfigReferences(rule.getConditions(), configuration);
             handleModuleConfigReferences(rule.getActions(), configuration);
         }
+        normalizeRuleConfigurations(rule);
         validateConfiguration(rule.getUID(), configDescriptions, new HashMap<String, Object>(configuration));
     }
 
@@ -1443,9 +1372,6 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
     private void processValue(Object configValue, ConfigDescriptionParameter configParameter) {
         if (configValue != null) {
             checkType(configValue, configParameter);
-            return;
-        }
-        if (configParameter.getDefault() != null) {
             return;
         }
         if (configParameter.isRequired()) {
@@ -1496,6 +1422,84 @@ public class RuleEngine implements RegistryChangeListener<ModuleType> {
         if (modules != null) {
             for (Module module : modules) {
                 ReferenceResolverUtil.updateModuleConfiguration(module, ruleConfiguration);
+            }
+        }
+    }
+
+    private void normalizeRuleConfigurations(Rule rule) {
+        List<ConfigDescriptionParameter> configDescriptions = rule.getConfigurationDescriptions();
+        Map<String, ConfigDescriptionParameter> mapConfigDescriptions;
+        if (configDescriptions != null) {
+            mapConfigDescriptions = getConfigDescriptionMap(configDescriptions);
+            normalizeConfiguration(rule.getConfiguration(), mapConfigDescriptions);
+        }
+        normalizeModuleConfigurations(rule.getTriggers());
+        normalizeModuleConfigurations(rule.getConditions());
+        normalizeModuleConfigurations(rule.getActions());
+
+    }
+
+    private <T extends Module> void normalizeModuleConfigurations(List<T> modules) {
+        for (Module module : modules) {
+            Configuration config = module.getConfiguration();
+            if (config != null) {
+                String type = module.getTypeUID();
+                ModuleType mt = mtRegistry.get(type);
+                if (mt != null) {
+                    List<ConfigDescriptionParameter> configDescriptions = mt.getConfigurationDescriptions();
+                    if (configDescriptions != null) {
+                        Map<String, ConfigDescriptionParameter> mapConfigDescriptions = getConfigDescriptionMap(
+                                configDescriptions);
+                        normalizeConfiguration(config, mapConfigDescriptions);
+                    }
+                }
+            }
+        }
+    }
+
+    private Map<String, ConfigDescriptionParameter> getConfigDescriptionMap(
+            List<ConfigDescriptionParameter> configDesc) {
+        Map<String, ConfigDescriptionParameter> mapConfigDescs = null;
+        if (configDesc != null) {
+            for (ConfigDescriptionParameter configDescriptionParameter : configDesc) {
+                if (mapConfigDescs == null) {
+                    mapConfigDescs = new HashMap<String, ConfigDescriptionParameter>();
+                }
+                mapConfigDescs.put(configDescriptionParameter.getName(), configDescriptionParameter);
+            }
+        }
+        return mapConfigDescs;
+    }
+
+    private void normalizeConfiguration(Configuration config, Map<String, ConfigDescriptionParameter> mapCD) {
+        if (config != null && mapCD != null) {
+            for (String propName : mapCD.keySet()) {
+                ConfigDescriptionParameter cd = mapCD.get(propName);
+                if (cd != null) {
+                    Object tmp = config.get(propName);
+                    Object defaultValue = cd.getDefault();
+                    if (tmp == null && defaultValue != null) {
+                        config.put(propName, defaultValue);
+                    }
+
+                    if (cd.isMultiple()) {
+                        tmp = config.get(propName);
+                        if (tmp != null && tmp instanceof String) {
+                            String sValue = (String) tmp;
+                            if (gson == null) {
+                                gson = new Gson();
+                            }
+                            try {
+                                Object value = gson.fromJson(sValue, List.class);
+                                config.put(propName, value);
+                            } catch (JsonSyntaxException e) {
+                                logger.error("Can't parse {} to list value.", sValue, e);
+                            }
+                            continue;
+                        }
+                    }
+                }
+                config.put(propName, ConfigUtil.normalizeType(config.get(propName), cd));
             }
         }
     }

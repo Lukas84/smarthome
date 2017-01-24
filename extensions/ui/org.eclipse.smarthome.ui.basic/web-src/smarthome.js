@@ -313,6 +313,7 @@
 		_t.id = _t.parentNode.getAttribute(o.idAttribute);
 		_t.icon = _t.parentNode.parentNode.querySelector(o.formIcon);
 		_t.visible = !_t.formRow.classList.contains(o.formRowHidden);
+		_t.label = _t.parentNode.parentNode.querySelector(o.formLabel);
 
 		if (_t.icon !== null) {
 			_t.iconName = _t.icon.getAttribute(o.iconAttribute);
@@ -353,9 +354,41 @@
 
 		_t.setValuePrivate = function() {};
 
-		_t.supressUpdate = function() {
+		_t.suppressUpdate = function() {
 			suppress = true;
 		};
+
+		_t.setLabelColor = function(color) {
+			_t.label.style.color = color;
+		};
+
+		_t.setValueColor = function(color) {
+			_t.parentNode.style.color = color;
+		};
+	}
+
+	/* class Frame */
+	/* Mimics Control interface, only setVisible method is used */
+	function Frame(parentNode) {
+		var
+			_t = this;
+
+		_t.parentNode = parentNode;
+		_t.id = _t.parentNode.getAttribute(o.idAttribute);
+		_t.visible = !_t.parentNode.classList.contains(o.formHidden);
+
+		_t.setVisible = function(state) {
+			if (state) {
+				_t.parentNode.classList.remove(o.formHidden);
+			} else {
+				_t.parentNode.classList.add(o.formHidden);
+			}
+
+			_t.visible = state;
+		};
+
+		_t.setValue = function() {};
+		_t.suppressUpdate = function() {};
 	}
 
 	/* class ControlImage */
@@ -434,7 +467,7 @@
 					item: _t.item,
 					value: value
 			}));
-			_t.supressUpdate();
+			_t.suppressUpdate();
 		};
 		_t.valueMap = {};
 		_t.buttons = [].slice.call(_t.parentNode.querySelectorAll(o.controlButton));
@@ -1136,7 +1169,7 @@
 				item: _t.item,
 				value: _t.input.checked ? "ON" : "OFF"
 			}));
-			_t.supressUpdate();
+			_t.suppressUpdate();
 		});
 
 		_t.setValuePrivate = function(v) {
@@ -1183,7 +1216,7 @@
 				item: _t.item,
 				value: _t.input.value
 			}));
-			_t.supressUpdate();
+			_t.suppressUpdate();
 		}
 
 		_t.debounceProxy = new DebounceProxy(function() {
@@ -1247,6 +1280,10 @@
 			if (_t.container !== null) {
 				_t.container.innerHTML = value;
 			}
+		};
+
+		_t.setValueColor = function(color) {
+			_t.container.style.color = color;
 		};
 
 		parentNode.parentNode.addEventListener("click", function() {
@@ -1420,10 +1457,15 @@
 					(smarthome.dataModelLegacy[control.item] === undefined) ||
 					(smarthome.dataModelLegacy[control.item].widgets === undefined)
 				) {
-					smarthome.dataModelLegacy[control.item] = { widgets: [] };
+					if (control.item !== undefined) {
+						smarthome.dataModelLegacy[control.item] = { widgets: [] };
+					}
 				}
 
-				smarthome.dataModelLegacy[control.item].widgets.push(control);
+				if (control.item !== undefined) {
+					smarthome.dataModelLegacy[control.item].widgets.push(control);
+				}
+
 				smarthome.dataModel[control.id] = control;
 			}
 
@@ -1474,6 +1516,10 @@
 				}
 				/*eslint no-fallthrough:0*/
 				e.addEventListener("control-change", controlChangeHandler);
+			});
+
+			[].forEach.call(document.querySelectorAll(o.form), function(e) {
+				appendControl(new Frame(e));
 			});
 		};
 
@@ -1556,6 +1602,12 @@
 					});
 				} else {
 					widget.setValue(value, data.item.state);
+					if (data.labelcolor !== undefined) {
+						widget.setLabelColor(data.labelcolor);
+					}
+					if (data.valuecolor !== undefined) {
+						widget.setValueColor(data.valuecolor);
+					}
 				}
 			}
 		});
@@ -1585,13 +1637,23 @@
 
 					var
 						item = widget.item.name,
-						value = widget.item.state;
+						value = widget.item.state,
+						labelcolor = widget.labelcolor,
+						valuecolor = widget.valuecolor;
 
-					smarthome.dataModelLegacy[item].widgets.forEach(function(w) {
-						if (value !== "NULL") {
-							w.setValue(value, value);
-						}
-					});
+					if (smarthome.dataModelLegacy[item] !== undefined) {
+						smarthome.dataModelLegacy[item].widgets.forEach(function(w) {
+							if (value !== "NULL") {
+								w.setValue(value, value);
+							}
+							if (labelcolor !== undefined) {
+								w.setLabelColor(labelcolor);
+							}
+							if (valuecolor !== undefined) {
+								w.setValueColor(valuecolor);
+							}
+						});
+					}
 				});
 			}
 
@@ -1716,12 +1778,15 @@
 	modal: ".mdl-modal",
 	modalContainer: ".mdl-modal__content",
 	selectionRows: ".mdl-form__selection-rows",
+	form: ".mdl-form",
+	formHidden: "mdl-form--hidden",
 	formControls: ".mdl-form__control",
 	formRowHidden: "mdl-form__row--hidden",
 	formValue: ".mdl-form__value",
 	formRadio: ".mdl-radio",
 	formRadioControl: ".mdl-radio__button",
 	formIcon: ".mdl-form__icon img",
+	formLabel: ".mdl-form__label",
 	uiLoadingBar: ".ui__loading",
 	layoutTitle: ".mdl-layout-title",
 	layoutHeader: ".mdl-layout__header",

@@ -1,4 +1,4 @@
-angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control', 'PaperUI.controllers.setup', 'PaperUI.controllers.configuration', 'PaperUI.controllers.extension', 'PaperUI.controllers.rules', 'PaperUI.services', 'PaperUI.services.rest', 'PaperUI.services.repositories', 'PaperUI.extensions', 'ngRoute', 'ngResource', 'ngMaterial', 'ngMessages', 'ngSanitize', 'ui.sortable' ]).config([ '$routeProvider', '$httpProvider', 'globalConfig', '$mdDateLocaleProvider', function($routeProvider, httpProvider, globalConfig, $mdDateLocaleProvider) {
+angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control', 'PaperUI.controllers.setup', 'PaperUI.controllers.configuration', 'PaperUI.controllers.extension', 'PaperUI.controllers.rules', 'PaperUI.services', 'PaperUI.services.rest', 'PaperUI.services.repositories', 'PaperUI.extensions', 'ngRoute', 'ngResource', 'ngMaterial', 'ngMessages', 'ngSanitize', 'ui.sortable' ]).config([ '$routeProvider', '$httpProvider', 'globalConfig', '$mdDateLocaleProvider', 'moduleConfig', 'dateTimeProvider', function($routeProvider, httpProvider, globalConfig, $mdDateLocaleProvider, moduleConfig, dateTimeProvider) {
     $routeProvider.when('/control', {
         templateUrl : 'partials/control.html',
         controller : 'ControlPageController',
@@ -70,7 +70,7 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
     }).when('/extensions', {
         templateUrl : 'partials/extensions.html',
         controller : 'ExtensionPageController',
-        title : 'Extensions'
+        title : moduleConfig.extensions && moduleConfig.extensions.hasOwnProperty('label') && moduleConfig.extensions['label'] ? moduleConfig.extensions['label'] : 'Extensions'
     }).when('/rules', {
         templateUrl : 'partials/rules.html',
         controller : 'RulesPageController',
@@ -97,11 +97,7 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
             redirectTo : '/control'
         });
     }
-    if (window.localStorage.getItem('paperui.language') == 'de') {
-        $mdDateLocaleProvider.shortMonths = [ 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez' ];
-    } else {
-        $mdDateLocaleProvider.shortMonths = [ 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
-    }
+    $mdDateLocaleProvider.shortMonths = dateTimeProvider.getMonths(true);
     $mdDateLocaleProvider.formatDate = function(date) {
         if (!date) {
             return null;
@@ -214,6 +210,9 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
                     element[0].children[nodeIndex].addEventListener('click', function(event) {
                         $(element[0]).removeClass('border-invalid');
                         if (attrs.multi == "true") {
+                            if (!scope.configuration[scope.parameter.name]) {
+                                scope.configuration[scope.parameter.name] = [];
+                            }
                             var index = scope.configuration[scope.parameter.name].indexOf(event.target.value)
                             if (index == -1) {
                                 scope.configuration[scope.parameter.name].push(event.target.value);
@@ -221,8 +220,11 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
                             } else {
                                 scope.configuration[scope.parameter.name].splice(index, 1);
                                 $(event.target).removeClass('dow-selected');
-                                if (attrs.ngRequired && scope.configuration[scope.parameter.name].length == 0) {
-                                    $(element[0]).addClass('border-invalid');
+                                if (scope.configuration[scope.parameter.name].length == 0) {
+                                    scope.configuration[scope.parameter.name] = null;
+                                    if (attrs.required) {
+                                        $(element[0]).addClass('border-invalid');
+                                    }
                                 }
                             }
                         } else {
@@ -233,9 +235,9 @@ angular.module('PaperUI', [ 'PaperUI.controllers', 'PaperUI.controllers.control'
                                 scope.configuration[scope.parameter.name] = event.target.value;
                                 $(event.target).addClass('dow-selected');
                             } else {
-                                scope.configuration[scope.parameter.name] = "";
+                                scope.configuration[scope.parameter.name] = null;
                                 $(event.target).removeClass('dow-selected');
-                                if (attrs.ngRequired == "true") {
+                                if (attrs.required) {
                                     $(element[0]).addClass('border-invalid');
                                 }
                             }
